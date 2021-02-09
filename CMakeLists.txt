@@ -1,5 +1,6 @@
 cmake_minimum_required(VERSION 3.12)
 
+set(PROJECT "CppTemplate")
 set(PROJECT         12_BenchmarkingAndLogging)
 project(${PROJECT}_Project VERSION 1.0.0 LANGUAGES CXX)
 
@@ -11,14 +12,26 @@ set(CMAKE_CXX_STANDARD_REQUIRED     ON)
 set(CMAKE_CXX_EXTENSIONS            OFF)
 
 # Options
-option(ENABLE_TESTING       "Enable a Unit Test build"      OFF)
-option(ENABLE_BENCHMARKS    "Enable Benchmark build"        ON)
+option(ENABLE_WARNINGS      "Enable to add warnings to a target."   ON)
+option(ENABLE_TESTING       "Enable a Unit Testing buid."           ON)
+option(ENABLE_COVERAGE      "Enable a Code Coverage buid."          OFF)
+option(ENABLE_BENCHMARKS    "Enable a Code Coverage buid."          ON)
 
-#cmake custom modules
-set(CMAKE_MODULE_PATH       ${PROJECT_SOURCE_DIR}/cmake/)
+# Cmake modules
+set(CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake/)
+include(ConfigSafeGuards)
+include(Warnings)
 include(Documentation)
-if (ENABLE_TESTING)
+if (ENABLE_TESTING OR ENABLE_COVERAGE)
     include(CTest)
+endif()
+if (ENABLE_COVERAGE)
+    if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+        include(CodeCoverage)
+    else()
+        message("Coverage only for GNU|Clang")
+        set(ENABLE_COVERAGE OFF)
+    endif()
 endif()    
 
 # cmake variables
@@ -26,23 +39,37 @@ set(MAIN            ${PROJECT}_Executable)
 set(LIBRARY_NAME    ${PROJECT}_MyLib)
 set(TEST_MAIN       ${PROJECT}_UnitTest)
 set(BENCHMARK_MAIN  ${PROJECT}_benchmark)
+set(COVERAGE_MAIN   ${PROJECT}_coverage)
 
-# add conan libraraies
-include(${CMAKE_BINARY_DIR}/conanbuildinfo.cmake)       # insert cmake code
+# Add conan libraries
+include(${CMAKE_BINARY_DIR}/conanbuildinfo.cmake)
 conan_basic_setup()
 
-add_subdirectory(${PROJECT_SOURCE_DIR}/external)
-add_subdirectory(${PROJECT_SOURCE_DIR}/src/)
-add_subdirectory(${PROJECT_SOURCE_DIR}/app/)
+# Add external libraries
+find_package(Git QUIET)
 
-# add unit test
-if (ENABLE_TESTING)
+if(GIT_FOUND AND EXISTS .git)
+    message(STATUS "Submodule update")
+    execute_process(COMMAND ${GIT_EXECUTABLE} submodule update --init --recursive
+                    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+                    RESULT_VARIABLE GIT_SUBMOD_RESULT)
+endif()
+
+add_subdirectory(external)
+
+# Add first-party libraries
+add_subdirectory(src)
+
+# Add executables
+add_subdirectory(app)
+
+# Add unit tests
+if (ENABLE_TESTING OR ENABLE_COVERAGE)
     enable_testing()
-    add_subdirectory(${PROJECT_SOURCE_DIR}/tests/)
-endif()    
+    add_subdirectory(tests)
+endif()
 
-# add benchmarks
-if (ENABLE_BENCHMARKS)
-    add_subdirectory(${PROJECT_SOURCE_DIR}/benchmarks/)
-endif()    
-
+# Add benchmarks
+if (ENABLE_BENCHMARKING)
+    add_subdirectory(benchmarks)
+endif()
